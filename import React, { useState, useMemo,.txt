@@ -1,0 +1,2014 @@
+import React, { useState, useMemo, useRef } from 'react';
+
+// --- Mock Data ---
+
+// Defines the relationship between countries and cities
+const MOCK_LOCATIONS = {
+  'USA': ['New York, NY', 'San Francisco, CA', 'Austin, TX', 'Boston, MA'],
+  'Canada': ['Toronto, ON', 'Vancouver, BC'],
+  'UK': ['London'],
+  'Germany': ['Berlin', 'Munich'],
+  'India': ['Bangalore', 'Mumbai', 'Delhi'],
+  'Remote': ['Remote'], // Handled as a "country" for simplicity
+};
+const ALL_COUNTRIES = Object.keys(MOCK_LOCATIONS);
+
+// In a real application, this would come from a database.
+const MOCK_JOB_OPENINGS = [
+  {
+    id: 1,
+    title: 'Frontend Developer Intern',
+    company: 'WebWidgets Inc.',
+    companyType: 'Startup',
+    location: { city: 'Remote', country: 'Remote' },
+    description: 'Join our team to build beautiful and responsive user interfaces using the latest web technologies.',
+    requiredSkills: ['React', 'JavaScript', 'HTML', 'CSS', 'Tailwind'],
+  },
+  {
+    id: 2,
+    title: 'Data Science Intern',
+    company: 'DataDriven Corp.',
+    companyType: 'Corporation',
+    location: { city: 'New York, NY', country: 'USA' },
+    description: 'Work with our data science team to analyze large datasets, build predictive models, and generate insights.',
+    requiredSkills: ['Python', 'SQL', 'Pandas', 'Jupyter', 'Statistics'],
+  },
+  {
+    id: 3,
+    title: 'Backend Engineer (Entry Level)',
+    company: 'SecureServers LLC',
+    companyType: 'Mid-Size',
+    location: { city: 'Austin, TX', country: 'USA' },
+    description: 'Help build and maintain the backbone of our services. Focus on API development, database management, and security.',
+    requiredSkills: ['Node.js', 'Express', 'SQL', 'REST API', 'Docker'],
+  },
+  {
+    id: 4,
+    title: 'Product Manager Intern',
+    company: 'Appify Solutions',
+    companyType: 'Startup',
+    location: { city: 'San Francisco, CA', country: 'USA' },
+    description: 'Define product roadmaps, work with engineering and design, and conduct user research.',
+    requiredSkills: ['Agile', 'Jira', 'User Research', 'Communication'],
+  },
+  {
+    id: 5,
+    title: 'Full-Stack Developer Intern',
+    company: 'TechFlow Global',
+    companyType: 'Corporation',
+    location: { city: 'Toronto, ON', country: 'Canada' },
+    description: 'A great opportunity to work on both the frontend and backend of our flagship product.',
+    requiredSkills: ['React', 'Node.js', 'SQL', 'JavaScript', 'Git'],
+  },
+  {
+    id: 6,
+    title: 'Cloud Engineer Intern',
+    company: 'InfraCloud Ltd.',
+    companyType: 'Startup',
+    location: { city: 'Remote', country: 'Remote' },
+    description: 'Learn to manage and scale cloud infrastructure on AWS and GCP.',
+    requiredSkills: ['AWS', 'Docker', 'Python', 'Linux'],
+  },
+  {
+    id: 7,
+    title: 'DevOps Intern',
+    company: 'DeployFast',
+    companyType: 'Startup',
+    location: { city: 'London', country: 'UK' },
+    description: 'Work on our CI/CD pipelines, manage infrastructure, and ensure site reliability.',
+    requiredSkills: ['Docker', 'AWS', 'Linux', 'Git'],
+  },
+  {
+    id: 8,
+    title: 'React Native Developer',
+    company: 'MobileFirst',
+    companyType: 'Mid-Size',
+    location: { city: 'Vancouver, BC', country: 'Canada' },
+    description: 'Develop cross-platform mobile applications for our clients.',
+    requiredSkills: ['React', 'React Native', 'JavaScript', 'Git'],
+  },
+  { // New startup job
+    id: 9,
+    title: 'AI/ML Research Intern',
+    company: 'NexusAI',
+    companyType: 'Startup',
+    location: { city: 'Boston, MA', country: 'USA' },
+    description: 'Join a fast-paced startup to work on cutting-edge generative AI models.',
+    requiredSkills: ['Python', 'AI/ML', 'Jupyter', 'Statistics'],
+  },
+  { // New corporation job
+    id: 10,
+    title: 'Business Analyst Intern',
+    company: 'Global Solutions Inc.',
+    companyType: 'Corporation',
+    location: { city: 'New York, NY', country: 'USA' },
+    description: 'Analyze market trends and support strategic initiatives in a large corporate environment.',
+    requiredSkills: ['Communication', 'SQL', 'Statistics'],
+  },
+];
+
+// Dynamically get all unique company types
+const ALL_COMPANY_TYPES = [
+  ...new Set(MOCK_JOB_OPENINGS.map(job => job.companyType))
+].sort();
+
+
+// A simple set of keywords our "AI" will look for in the resume text.
+const SKILL_KEYWORDS = [
+  'react', 'react native', 'javascript', 'html', 'css', 'tailwind', 'python', 'sql', 'pandas',
+  'jupyter', 'statistics', 'node.js', 'express', 'rest api', 'docker',
+  'agile', 'jira', 'user research', 'communication', 'git', 'java', 'c++',
+  'aws', 'gcp', 'azure', 'linux', 'next.js', 'graphql'
+];
+
+// Skill suggestions for the new feature
+const EMERGING_SKILL_MAP = {
+  'react': 'Next.js',
+  'python': 'AI/ML',
+  'node.js': 'GraphQL',
+  'sql': 'Data Engineering',
+  'javascript': 'TypeScript',
+  'aws': 'Terraform',
+};
+
+// Add list of languages
+const ALL_LANGUAGES = ['English', 'Spanish', 'French', 'Mandarin', 'German', 'Hindi', 'Japanese', 'Korean', 'Portuguese', 'Russian'];
+
+// Map countries to their primary languages
+const COUNTRY_LANGUAGE_MAP = {
+  'USA': ['English'],
+  'Canada': ['English', 'French'],
+  'UK': ['English'],
+  'Germany': ['German'],
+  'India': ['Hindi', 'English'],
+  'Remote': [],
+};
+
+// Mock message for initial state
+const MOCK_WELCOME_MESSAGE = {
+  id: 'msg-001',
+  company: 'TalentNexus',
+  jobTitle: 'Your Career Journey',
+  subject: 'Welcome to your Inbox!',
+  body: "This is where you'll receive updates from companies after you apply.\n\nTo test this feature, go to the 'Jobs' or 'Recommendations' tab, apply for a position, and wait about 10 seconds. A new message will appear here!",
+  timestamp: Date.now(),
+  isRead: false,
+};
+
+
+// --- Helper Functions & Components ---
+
+/**
+ * A reusable component for displaying a skill "tag" or "pill".
+ */
+const SkillTag = ({ skill, type = 'default' }) => {
+  const baseClasses = 'px-3 py-1 rounded-full text-sm font-medium mr-2 mb-2 shadow-sm';
+  const typeClasses = {
+    default: 'bg-indigo-100 text-indigo-800',
+    match: 'bg-green-100 text-green-800',
+    gap: 'bg-red-100 text-red-800',
+    upgrade: 'bg-yellow-100 text-yellow-800',
+  };
+  return <span className={`${baseClasses} ${typeClasses[type]}`}>{skill}</span>;
+};
+
+/**
+ * A reusable checkbox component.
+ */
+const Checkbox = ({ id, label, checked, onChange }) => (
+  <label htmlFor={id} className="flex items-center space-x-2 cursor-pointer">
+    <input
+      id={id}
+      type="checkbox"
+      checked={checked}
+      onChange={onChange}
+      className="rounded h-4 w-4 text-indigo-600 border-gray-300 focus:ring-indigo-500 cursor-pointer"
+    />
+    <span className="text-sm text-gray-700">{label}</span>
+  </label>
+);
+
+/**
+ * A reusable Modal component for AI features
+ */
+const Modal = ({ title, content, onClose, isLoading, onAction, actionLabel, onTtsAction, isAudioPlaying, showAudioPlayer }) => (
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm" aria-labelledby="modal-title" role="dialog" aria-modal="true">
+    <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full m-4 max-h-[80vh] flex flex-col">
+      <div className="flex justify-between items-center p-4 border-b border-gray-200">
+        <h3 className="text-lg font-semibold text-gray-800" id="modal-title">{title}</h3>
+        <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+          <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
+      <div className="p-6 overflow-y-auto">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center p-10">
+            <svg className="animate-spin h-10 w-10 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p className="mt-4 text-sm text-gray-500">AI is thinking...</p>
+          </div>
+        ) : (
+          <p className="text-sm text-gray-700 whitespace-pre-wrap">{content}</p>
+        )}
+      </div>
+      <div className="flex justify-end p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+        {/* TTS Button */}
+        {showAudioPlayer && onTtsAction && (
+          <button
+            type="button"
+            onClick={onTtsAction}
+            disabled={isAudioPlaying}
+            className="mr-auto inline-flex justify-center items-center rounded-md border border-transparent bg-gray-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-gray-700 disabled:bg-gray-300"
+          >
+            {isAudioPlaying ? (
+              <svg className="animate-spin h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.536 8.464a5 5 0 010 7.072m2.828-9.9a9 9 0 010 12.728M5.586 15H4a1 1 0 01-1-1v-4a1 1 0 011-1h1.586l4.707-4.707C10.923 3.663 12 4.109 12 5v14c0 .89-1.077 1.337-1.707.707L5.586 15z" />
+              </svg>
+            )}
+            <span className="ml-2">{isAudioPlaying ? 'Playing...' : 'Read Aloud ✨'}</span>
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={onClose}
+          className="mr-2 inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+        >
+          Close
+        </button>
+        {onAction && actionLabel && (
+          <button
+            type="button"
+            onClick={onAction}
+            className="inline-flex justify-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+          >
+            {actionLabel}
+          </button>
+        )}
+      </div>
+    </div>
+  </div>
+);
+
+
+/**
+ * The main application component.
+ */
+export default function App() {
+  // --- State ---
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [activeTab, setActiveTab] = useState('profile');
+  const [studentProfile, setStudentProfile] = useState({
+    name: 'Alex Johnson',
+    resumeText: 'Experienced in building web applications with React and Node.js. Passionate about data analysis with Python and SQL.',
+  });
+  const [manualSkills, setManualSkills] = useState(['React', 'Python']);
+  const [currentSkillInput, setCurrentSkillInput] = useState('');
+
+  // Location state
+  const [selectedCountries, setSelectedCountries] = useState([]);
+  const [selectedCities, setSelectedCities] = useState([]);
+
+  // Company type state
+  const [selectedCompanyTypes, setSelectedCompanyTypes] = useState([]);
+
+  // Language state
+  const [selectedLanguages, setSelectedLanguages] = useState(['English']);
+
+  // "Others" states
+  const [showOtherLocation, setShowOtherLocation] = useState(false);
+  const [otherLocationText, setOtherLocationText] = useState('');
+  const [showOtherCity, setShowOtherCity] = useState(false);
+  const [otherCityText, setOtherCityText] = useState('');
+  const [showOtherLanguage, setShowOtherLanguage] = useState(false);
+  const [otherLanguageText, setOtherLanguageText] = useState('');
+
+  const [recommendations, setRecommendations] = useState([]);
+  const [upgradeSuggestions, setUpgradeSuggestions] = useState({ priority: [], emerging: [] });
+  const [isLoading, setIsLoading] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [isExtracting, setIsExtracting] = useState(false);
+
+  // Modal State
+  const [modalContent, setModalContent] = useState({ title: '', content: '', onAction: null, actionLabel: '', showAudioPlayer: false });
+  const [isApiLoading, setIsApiLoading] = useState(false);
+
+  // TTS State
+  const [audioContext, setAudioContext] = useState(null);
+  const [audioBuffer, setAudioBuffer] = useState(null);
+  const [audioSource, setAudioSource] = useState(null);
+  const [isAudioPlaying, setIsAudioPlaying] = useState(false);
+
+  // Notification State
+  const [notification, setNotification] = useState({ show: false, title: '', message: '' });
+
+  // Apply Modal State
+  const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [applyingForJob, setApplyingForJob] = useState(null);
+  const [applicationFile, setApplicationFile] = useState(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  // Premium Feature State
+  const [isPremiumUser, setIsPremiumUser] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+
+  // Inbox State
+  const [messages, setMessages] = useState([MOCK_WELCOME_MESSAGE]);
+  const unreadCount = useMemo(() => messages.filter(m => !m.isRead).length, [messages]);
+
+  // Profile Dropdown State
+  const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
+  const profileDropdownRef = useRef(null); // Ref for closing dropdown on outside click
+
+  // Memoized list of available cities based on selected countries
+  const availableCities = useMemo(() => {
+    return selectedCountries.flatMap(country => MOCK_LOCATIONS[country] || []);
+  }, [selectedCountries]);
+
+
+  // --- "AI" Logic Simulation ---
+
+  /**
+   * Simulates parsing a resume text to extract keywords.
+   */
+  const extractSkillsFromResume = (text) => {
+    const foundSkills = new Set();
+    const lowerText = text.toLowerCase();
+
+    SKILL_KEYWORDS.forEach(skill => {
+      // Use a simple regex to find the skill as a whole word
+      // Escape special regex characters like '.' and '+'
+      const escapedSkill = skill.replace(/\./g, '\\.').replace(/\+/g, '\\+').replace('c++', 'c\\+\\+'); // Fix for c++
+      const regex = new RegExp(`\\b${escapedSkill}\\b`, 'gi'); // Add 'i' for case-insensitive
+      if (lowerText.match(regex)) {
+        // Find the "canonical" version of the skill
+        const canonicalSkill = MOCK_JOB_OPENINGS
+          .flatMap(job => job.requiredSkills)
+          .find(s => s.toLowerCase() === skill) || skill;
+
+        // Handle capitalization for canonical skills
+        const finalSkill = canonicalSkill === skill
+          ? (SKILL_KEYWORDS.find(s => s === skill) || skill) // find original casing
+          : canonicalSkill;
+
+        foundSkills.add(finalSkill);
+      }
+    });
+
+    return Array.from(foundSkills);
+  };
+
+  // --- Click Outside Hook ---
+  // Hook to close dropdown when clicking outside
+  const useOutsideAlerter = (ref) => {
+    React.useEffect(() => {
+      function handleClickOutside(event) {
+        if (ref.current && !ref.current.contains(event.target)) {
+          setIsProfileDropdownOpen(false); // Close dropdown
+        }
+      }
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => {
+        document.removeEventListener("mousedown", handleClickOutside);
+      };
+    }, [ref]);
+  }
+  useOutsideAlerter(profileDropdownRef); // Apply the hook
+
+  /**
+   * Helper function to read a file as Base64
+   */
+  const getBase64 = (file) => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = () => resolve(reader.result);
+      reader.onerror = (error) => reject(error);
+    });
+  };
+
+  /**
+   * Simulates calling the Gemini API to extract text from an uploaded image.
+   */
+  const extractSkillsFromApi = async () => {
+    if (!selectedFile) return;
+
+    if (!selectedFile.type.startsWith('image/')) {
+      console.warn('Please upload an image file (e.g., JPG, PNG). PDF processing is not supported in this demo.');
+      return;
+    }
+
+    setIsExtracting(true);
+
+    try {
+      const base64DataUrl = await getBase64(selectedFile);
+      const [header, base64ImageData] = base64DataUrl.split(';base64,');
+
+      const apiKey = ""; // API key will be injected by the environment
+      const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+      const payload = {
+        contents: [
+          {
+            role: "user",
+            parts: [
+              { text: "You are an expert resume parser. Read this resume image and extract all text from it. Respond only with the full, raw text content of the resume." },
+              {
+                inlineData: {
+                  mimeType: selectedFile.type,
+                  data: base64ImageData
+                }
+              }
+            ]
+          }
+        ],
+      };
+
+      // Simulating API call for speed
+      const useMockApi = true;
+      if (useMockApi) {
+        await new Promise(res => setTimeout(res, 1000)); // Simulate network delay
+        const mockExtractedText = "SIMULATED EXTRACTED TEXT: Alex Johnson. Full-Stack Developer. Skills: React, JavaScript, HTML, CSS. Also experience with Python for data scripts. Familiar with Agile and Jira. Project: Built a MERN stack app with Node.js and Express.";
+        setStudentProfile(prev => ({ ...prev, resumeText: mockExtractedText }));
+      } else {
+        // Real API call logic (uncomment for live API)
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          throw new Error(`API call failed with status: ${response.status}`);
+        }
+        const result = await response.json();
+        const candidate = result.candidates?.[0];
+
+        if (candidate && candidate.content?.parts?.[0]?.text) {
+          const extractedText = candidate.content.parts[0].text;
+          setStudentProfile(prev => ({ ...prev, resumeText: extractedText }));
+        } else {
+          throw new Error("API response was not as expected.");
+        }
+      }
+
+    } catch (error) {
+      console.error("Error extracting text from image:", error);
+      setStudentProfile(prev => ({ ...prev, resumeText: "ERROR - SIMULATED TEXT: Experienced in building web applications with React and Node.js. Passionate about data analysis with Python and SQL." }));
+    } finally {
+      setIsExtracting(false);
+      setSelectedFile(null);
+    }
+  };
+
+
+  /**
+   * Simulates the AI recommendation engine.
+   */
+  const runRecommendationEngine = () => {
+    setIsLoading(true);
+
+    // 1. Consolidate all student skills
+    const resumeSkills = extractSkillsFromResume(studentProfile.resumeText);
+    const allStudentSkills = [
+      ...new Set(
+        [...manualSkills, ...resumeSkills].map(s => s.toLowerCase())
+      )
+    ];
+
+    // 2. Simulate AI processing time
+    setTimeout(() => {
+      // 3. Compare skills and generate matches
+      const matches = MOCK_JOB_OPENINGS.map(job => {
+        const required = job.requiredSkills.map(s => s.toLowerCase());
+
+        const matchingSkills = allStudentSkills.filter(skill =>
+          required.includes(skill)
+        );
+
+        const skillGaps = job.requiredSkills.filter(skill =>
+          !allStudentSkills.includes(skill.toLowerCase())
+        );
+
+        const matchScore = required.length > 0
+          ? (matchingSkills.length / required.length) * 100
+          : 0;
+
+        return {
+          ...job,
+          matchingSkills: job.requiredSkills.filter(skill => allStudentSkills.includes(skill.toLowerCase())),
+          skillGaps,
+          matchScore: Math.round(matchScore),
+        };
+      });
+
+      // 4. Filter by location FIRST
+      const filteredMatches = matches.filter(match => {
+        // Location filter logic
+        const locationPass = (() => {
+          if (selectedCountries.length === 0 && selectedCities.length === 0) return true;
+          if (selectedCities.length > 0) {
+            return selectedCities.includes(match.location.city);
+          }
+          if (selectedCountries.length > 0) {
+            return selectedCountries.includes(match.location.country);
+          }
+          return false;
+        })();
+
+        // Company Type filter logic
+        const companyTypePass = (() => {
+          if (selectedCompanyTypes.length === 0) return true; // If none selected, pass all
+          return selectedCompanyTypes.includes(match.companyType);
+        })();
+
+        return locationPass && companyTypePass; // Must pass both filters
+      });
+
+      // 5. Generate Skill Upgrade Suggestions
+
+      // Re-calculate gaps based ONLY on filtered jobs
+      const filteredGaps = new Map();
+      filteredMatches.forEach(job => {
+        job.skillGaps.forEach(gap => {
+          filteredGaps.set(gap, (filteredGaps.get(gap) || 0) + 1);
+        });
+      });
+
+      const priorityGaps = Array.from(filteredGaps.entries())
+        .sort((a, b) => b[1] - a[1]) // Sort by frequency
+        .slice(0, 3) // Get top 3
+        .map(item => item[0]); // Get skill name
+
+      const emergingSuggestions = new Set();
+      allStudentSkills.forEach(skill => {
+        const suggestion = EMERGING_SKILL_MAP[skill];
+        // THE FIX: Only add if it exists AND user doesn't already have it
+        if (suggestion && !allStudentSkills.includes(suggestion.toLowerCase())) {
+          emergingSuggestions.add(suggestion);
+        }
+      });
+
+      // 6. Sort recommendations by match score
+      filteredMatches.sort((a, b) => b.matchScore - a.matchScore);
+
+      setRecommendations(filteredMatches);
+      setUpgradeSuggestions({
+        priority: priorityGaps,
+        emerging: Array.from(emergingSuggestions)
+      });
+      setIsLoading(false);
+      setActiveTab('recommendations');
+    }, 1500); // 1.5 second delay
+  };
+
+  // --- Gemini API Call Functions ---
+
+  /**
+   * Generic function to call the Gemini API with exponential backoff.
+   */
+  const callGeminiApi = async (systemPrompt, userQuery, useGrounding = false, maxRetries = 3) => {
+    const apiKey = ""; // API key will be injected by the environment
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`;
+
+    const payload = {
+      contents: [{ parts: [{ text: userQuery }] }],
+      systemInstruction: {
+        parts: [{ text: systemPrompt }]
+      },
+    };
+
+    if (useGrounding) {
+      payload.tools = [{ "google_search": {} }];
+    }
+
+    let delay = 1000; // Start with 1 second
+    for (let i = 0; i <= maxRetries; i++) {
+      try {
+        const response = await fetch(apiUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+          if (response.status === 429 || response.status >= 500) {
+            // Throttling or server error, wait and retry
+            if (i === maxRetries) {
+              return { error: `API call failed after ${maxRetries} retries with status: ${response.status}` };
+            }
+            await new Promise(res => setTimeout(res, delay));
+            delay *= 2; // Exponential backoff
+            continue; // Retry
+          }
+          return { error: `API call failed with status: ${response.status}` };
+        }
+
+        const result = await response.json();
+        const candidate = result.candidates?.[0];
+
+        if (candidate && candidate.content?.parts?.[0]?.text) {
+          const text = candidate.content.parts[0].text;
+          let sources = [];
+          const groundingMetadata = candidate.groundingMetadata;
+          if (groundingMetadata && groundingMetadata.groundingAttributions) {
+            sources = groundingMetadata.groundingAttributions
+              .map(attribution => ({
+                uri: attribution.web?.uri,
+                title: attribution.web?.title,
+              }))
+              .filter(source => source.uri && source.title);
+          }
+          return { text, sources };
+        } else {
+          return { error: "API response was not as expected." };
+        }
+      } catch (error) {
+        if (i === maxRetries) {
+          return { error: `API call failed: ${error.message}` };
+        }
+        await new Promise(res => setTimeout(res, delay));
+        delay *= 2;
+      }
+    }
+    return { error: "An unknown error occurred during the API call." };
+  };
+
+  /**
+   * AI: Get company vibe check
+   */
+  const handleVibeCheck = async (companyName) => {
+    setIsApiLoading(true);
+    setModalContent({ title: `Vibe Check: ${companyName}`, content: '', isLoading: true });
+
+    const systemPrompt = "You are a helpful career assistant. The user wants to know about the company culture, or 'vibe', of a company. Find recent news, employee reviews, or articles about the company and provide a concise, single-paragraph summary. Focus on aspects like work-life balance, culture, and employee sentiment. If you can't find specific 'vibe' info, summarize what the company is best known for recently.";
+    const userQuery = `What is the company culture or "vibe" at ${companyName}?`;
+
+    const { text, error } = await callGeminiApi(systemPrompt, userQuery, true);
+    setModalContent({ title: `Vibe Check: ${companyName}`, content: text || error, isLoading: false });
+    setIsApiLoading(false);
+  };
+
+  /**
+   * AI: Draft personalized pitch for a job
+   */
+  const handleDraftPitch = async (job) => {
+    setIsApiLoading(true);
+    setModalContent({ title: `AI Pitch for: ${job.title}`, content: '', isLoading: true });
+
+    const resumeSkills = extractSkillsFromResume(studentProfile.resumeText);
+    const allStudentSkills = [...new Set([...manualSkills, ...resumeSkills])];
+
+    const systemPrompt = "You are an expert career coach. A student is applying for an internship. Their profile and the job description are provided. Draft a concise, 3-4 sentence pitch for their cover letter or introductory message. The pitch must: \n1. Sound authentic and human, not like corporate jargon. \n2. Highlight 1-2 key skills from the student's profile that DIRECTLY match the job's required skills. \n3. Acknowledge one key skill gap, but frame it positively as an area they are 'excited to learn' or 'eager to develop'. \n4. Express genuine enthusiasm for this specific company or role.";
+    const userQuery = `
+      MY PROFILE:
+      - Name: ${studentProfile.name}
+      - My Skills: ${allStudentSkills.join(', ')}
+      - My (pasted) Resume Text: "${studentProfile.resumeText}"
+
+      THE JOB:
+      - Title: ${job.title}
+      - Company: ${job.company}
+      - Description: ${job.description}
+      - Required Skills: ${job.requiredSkills.join(', ')}
+      - My Skill Gaps for this job: ${job.skillGaps.join(', ')}
+
+      Draft the 3-4 sentence pitch.
+    `;
+
+    const { text, error } = await callGeminiApi(systemPrompt, userQuery, false);
+    setModalContent({ title: `AI Pitch for: ${job.title}`, content: text || error, isLoading: false });
+    setIsApiLoading(false);
+  };
+
+  /**
+   * AI: Improve Resume Text (Free Version)
+   */
+  const handleImproveResume = async () => {
+    setIsApiLoading(true);
+    const originalText = studentProfile.resumeText;
+
+    const systemPrompt = "You are a professional resume writer. A student has pasted their resume text. Rewrite the text to be more professional, action-oriented, and impactful. Use strong verbs and quantify achievements where possible (even if you have to invent a plausible number). Format the output cleanly. Respond ONLY with the improved text.";
+    const userQuery = `Here is my resume text. Please improve it: \n\n"${originalText}"`;
+
+    const { text, error } = await callGeminiApi(systemPrompt, userQuery, false);
+    
+    if (text) {
+      setStudentProfile(prev => ({ ...prev, resumeText: text }));
+    } else {
+      // Show error in modal? For now, just log it and don't change text
+      console.error("Error improving resume:", error);
+      setNotification({ show: true, title: 'Error', message: 'Could not improve resume at this time.' });
+      setTimeout(() => setNotification({ show: false, title: '', message: '' }), 4000);
+    }
+    setIsApiLoading(false);
+  };
+
+  /**
+   * AI: Enhance Resume (Premium Feature)
+   */
+  const handleEnhanceResume = () => {
+    if (isPremiumUser) {
+      // If user is premium, run the standard "Improve Resume" logic
+      handleImproveResume();
+    } else {
+      // If not premium, open the upgrade modal
+      setIsUpgradeModalOpen(true);
+    }
+  };
+
+
+  /**
+   * AI: Get Interview Prep Questions
+   */
+  const handleInterviewPrep = async (job) => {
+    setIsApiLoading(true);
+    setAudioBuffer(null); // Clear previous audio
+    setModalContent({ title: `Interview Prep Kit: ${job.title}`, content: '', isLoading: true, showAudioPlayer: false });
+
+    const resumeSkills = extractSkillsFromResume(studentProfile.resumeText);
+    const allStudentSkills = [...new Set([...manualSkills, ...resumeSkills])];
+
+    const systemPrompt = "You are a senior hiring manager. A student is preparing for an internship interview. Based on their profile and the job description, generate a list of 5 mock interview questions (2 behavioral, 3 technical) tailored to this specific role. After each question, provide a brief, one-sentence tip on what you're listening for in a good answer. Format it clearly (e.g., '1. (Behavioral) ... \n - Tip: ...').";
+    const userQuery = `
+      MY PROFILE:
+      - My Skills: ${allStudentSkills.join(', ')}
+      - My (pasted) Resume Text: "${studentProfile.resumeText}"
+
+      THE JOB:
+      - Title: ${job.title}
+      - Company: ${job.company}
+      - Description: ${job.description}
+      - Required Skills: ${job.requiredSkills.join(', ')}
+
+      Generate the 5 mock interview questions and tips.
+    `;
+
+    const { text, error } = await callGeminiApi(systemPrompt, userQuery, false);
+    setModalContent(prev => ({ ...prev, content: text || error, isLoading: false, showAudioPlayer: !!text }));
+    setIsApiLoading(false);
+  };
+
+  // --- TTS (Text-to-Speech) Functions ---
+
+  // Helper: Base64 to ArrayBuffer
+  const base64ToArrayBuffer = (base64) => {
+    const binaryString = window.atob(base64);
+    const len = binaryString.length;
+    const bytes = new Uint8Array(len);
+    for (let i = 0; i < len; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  };
+
+  // Helper: PCM to WAV
+  const pcmToWav = (pcmData, sampleRate) => {
+    const numChannels = 1;
+    const bitsPerSample = 16;
+    const bytesPerSample = bitsPerSample / 8;
+    const blockAlign = numChannels * bytesPerSample;
+    const byteRate = sampleRate * blockAlign;
+    const dataSize = pcmData.length * bytesPerSample;
+    const fileSize = 44 + dataSize;
+
+    const buffer = new ArrayBuffer(fileSize);
+    const view = new DataView(buffer);
+
+    // RIFF header
+    view.setUint32(0, 0x52494646, false); // "RIFF"
+    view.setUint32(4, fileSize - 8, true); // File size - 8
+    view.setUint32(8, 0x57415645, false); // "WAVE"
+
+    // fmt chunk
+    view.setUint32(12, 0x666d7420, false); // "fmt "
+    view.setUint32(16, 16, true); // Subchunk1 size (16 for PCM)
+    view.setUint16(20, 1, true); // Audio format (1 for PCM)
+    view.setUint16(22, numChannels, true); // Num channels
+    view.setUint32(24, sampleRate, true); // Sample rate
+    view.setUint32(28, byteRate, true); // Byte rate
+    view.setUint16(32, blockAlign, true); // Block align
+    view.setUint16(34, bitsPerSample, true); // Bits per sample
+
+    // data chunk
+    view.setUint32(36, 0x64617461, false); // "data"
+    view.setUint32(40, dataSize, true); // Subchunk2 size
+
+    // Write PCM data
+    let offset = 44;
+    for (let i = 0; i < pcmData.length; i++, offset += 2) {
+      view.setInt16(offset, pcmData[i], true);
+    }
+
+    return new Blob([buffer], { type: 'audio/wav' });
+  };
+
+  // Main TTS API call function
+  const callTtsApi = async (text) => {
+    const apiKey = ""; // API key will be injected by the environment
+    const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-tts:generateContent?key=${apiKey}`;
+
+    const payload = {
+      contents: [{
+        parts: [{ text: `Say this in a helpful, professional tone: ${text}` }]
+      }],
+      generationConfig: {
+        responseModalities: ["AUDIO"],
+        speechConfig: {
+          voiceConfig: {
+            prebuiltVoiceConfig: { voiceName: "Kore" } // A professional voice
+          }
+        }
+      },
+      model: "gemini-2.5-flash-preview-tts"
+    };
+
+    try {
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(`TTS API failed with status: ${response.status}`);
+      const result = await response.json();
+      const part = result?.candidates?.[0]?.content?.parts?.[0];
+      const audioData = part?.inlineData?.data;
+      const mimeType = part?.inlineData?.mimeType;
+
+      if (audioData && mimeType && mimeType.startsWith("audio/L16")) {
+        const sampleRateMatch = mimeType.match(/rate=(\d+)/);
+        const sampleRate = sampleRateMatch ? parseInt(sampleRateMatch[1], 10) : 24000;
+        const pcmData = base64ToArrayBuffer(audioData);
+        const pcm16 = new Int16Array(pcmData);
+        const wavBlob = pcmToWav(pcm16, sampleRate);
+        return { wavBlob };
+      } else {
+        throw new Error("Invalid TTS response format.");
+      }
+    } catch (error) {
+      console.error("Error generating TTS:", error);
+      return { error: error.message };
+    }
+  };
+
+  // Play TTS Audio
+  const handlePlayTts = async () => {
+    if (isAudioPlaying || !modalContent.content) return;
+    setIsAudioPlaying(true);
+
+    try {
+      let blobToPlay;
+      if (audioBuffer) {
+        // Use cached audio
+        blobToPlay = audioBuffer;
+      } else {
+        // Generate new audio
+        const { wavBlob, error } = await callTtsApi(modalContent.content);
+        if (error) throw new Error(error);
+        setAudioBuffer(wavBlob); // Cache it
+        blobToPlay = wavBlob;
+      }
+
+      if (audioSource) {
+        audioSource.stop();
+      }
+
+      const audioUrl = URL.createObjectURL(blobToPlay);
+      const newAudio = new Audio(audioUrl);
+      newAudio.onended = () => {
+        setIsAudioPlaying(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+      newAudio.play();
+      setAudioSource(newAudio); // Store reference to stop it
+    } catch (error) {
+      console.error("Error playing TTS audio:", error);
+      setIsAudioPlaying(false);
+    }
+  };
+
+
+  // --- Event Handlers ---
+
+  const handleProfileChange = (e) => {
+    const { name, value } = e.target;
+    setStudentProfile(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedFile(e.target.files[0]);
+    } else {
+      setSelectedFile(null);
+    }
+  };
+
+  const addManualSkill = () => {
+    if (currentSkillInput && !manualSkills.find(s => s.toLowerCase() === currentSkillInput.toLowerCase())) {
+      setManualSkills([...manualSkills, currentSkillInput]);
+      setCurrentSkillInput('');
+    }
+  };
+
+  const removeManualSkill = (skillToRemove) => {
+    setManualSkills(manualSkills.filter(skill => skill !== skillToRemove));
+  };
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    // In a real app, you'd have auth logic here
+    setIsLoggedIn(true);
+  };
+
+  // Location Handlers
+  const handleCountryChange = (country, isChecked) => {
+    let newCountries;
+    if (isChecked) {
+      newCountries = [...selectedCountries, country];
+
+      // Suggest languages based on country
+      const languagesToSuggest = COUNTRY_LANGUAGE_MAP[country] || [];
+      if (languagesToSuggest.length > 0) {
+        setSelectedLanguages(prevLanguages => {
+          const newLangSet = new Set([...prevLanguages, ...languagesToSuggest]);
+          return Array.from(newLangSet);
+        });
+      }
+
+    } else {
+      newCountries = selectedCountries.filter(c => c !== country);
+      // Also remove cities from that country
+      const citiesOfCountry = MOCK_LOCATIONS[country] || [];
+      setSelectedCities(selectedCities.filter(city => !citiesOfCountry.includes(city)));
+    }
+    setSelectedCountries(newCountries);
+  };
+
+  const handleCityChange = (city, isChecked) => {
+    if (isChecked) {
+      setSelectedCities([...selectedCities, city]);
+    } else {
+      setSelectedCities(selectedCities.filter(c => c !== city));
+    }
+  };
+
+  // "Others" Location Handler
+  const handleShowOtherChange = (isChecked) => {
+    setShowOtherLocation(isChecked);
+    if (!isChecked) {
+      setOtherLocationText(''); // Clear text if unchecked
+    }
+  };
+
+  // "Others" City Handler
+  const handleShowOtherCityChange = (isChecked) => {
+    setShowOtherCity(isChecked);
+    if (!isChecked) {
+      setOtherCityText(''); // Clear text if unchecked
+    }
+  };
+
+  // Company Type Handler
+  const handleCompanyTypeChange = (type, isChecked) => {
+    if (isChecked) {
+      setSelectedCompanyTypes([...selectedCompanyTypes, type]);
+    } else {
+      setSelectedCompanyTypes(selectedCompanyTypes.filter(t => t !== type));
+    }
+  };
+
+  // Language Handler
+  const handleLanguageChange = (language, isChecked) => {
+    if (isChecked) {
+      setSelectedLanguages([...selectedLanguages, language]);
+    } else {
+      setSelectedLanguages(selectedLanguages.filter(l => l !== language));
+    }
+  };
+
+  // "Others" Language Handler
+  const handleShowOtherLanguageChange = (isChecked) => {
+    setShowOtherLanguage(isChecked);
+    if (!isChecked) setOtherLanguageText('');
+  };
+
+  // Inbox Handler
+  const handleMarkAsRead = (messageId) => {
+    setMessages(prevMessages =>
+      prevMessages.map(msg =>
+        msg.id === messageId ? { ...msg, isRead: true } : msg
+      )
+    );
+  };
+
+  const handleApply = (job) => {
+    setApplyingForJob(job);
+    setIsApplyModalOpen(true);
+    setApplicationFile(null);
+  };
+
+  // Handle Application Submission to simulate message
+  const handleSubmitApplication = () => {
+    if (!applicationFile || !applyingForJob) return;
+    const submittedJob = applyingForJob; // Store job info
+
+    setIsSubmitting(true);
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setIsApplyModalOpen(false);
+      setNotification({
+        show: true,
+        title: 'Success!',
+        message: `Applied to ${submittedJob.title} at ${submittedJob.company}. (Demo)`
+      });
+      setApplyingForJob(null);
+      setApplicationFile(null);
+      setTimeout(() => {
+        setNotification({ show: false, title: '', message: '' });
+      }, 4000);
+
+      // --- Simulate a message response ---
+      setTimeout(() => {
+        const newMessage = {
+          id: crypto.randomUUID(),
+          company: submittedJob.company,
+          jobTitle: submittedJob.title,
+          subject: `Update on your application for ${submittedJob.title}`,
+          body: `Hi ${studentProfile.name},\n\nThank you for applying for the ${submittedJob.title} position at ${submittedJob.company}. We have received your application and our team is currently reviewing it.\n\nWe appreciate your interest in joining us and will get back to you soon.\n\nBest regards,\nThe Hiring Team at ${submittedJob.company}`,
+          timestamp: Date.now(),
+          isRead: false,
+        };
+        
+        // Add message to inbox
+        setMessages(prev => [newMessage, ...prev]);
+
+        // Show "New Message" notification
+        setNotification({
+          show: true,
+          title: '🔔 New Message',
+          message: `${newMessage.company} sent an update on your application for ${newMessage.jobTitle}.`
+        });
+        setTimeout(() => {
+          setNotification({ show: false, title: '', message: '' });
+        }, 5000); // Show for 5 seconds
+
+      }, 10000); // 10 second delay after applying
+
+    }, 2000);
+  };
+
+  // Handle Premium Upgrade
+  const handleUpgradeToPremium = (method) => {
+    // This function is now just a redirect or a notification
+    // The actual "unlocking" doesn't happen, as we can't verify payment.
+    
+    if (method === 'credit_card') {
+      // Simulate redirect to payment gateway
+      setNotification({ 
+        show: true, 
+        title: 'Redirecting...', 
+        message: 'Redirecting to secure credit card payment gateway. (Demo)' 
+      });
+      // In a real app, you'd use window.location.href = '...';
+      // Here, we just close the modal and show notification.
+      setIsUpgradeModalOpen(false);
+      setTimeout(() => {
+        setNotification({ show: false, title: '', message: '' });
+      }, 4000);
+    } else {
+      // UPI payment
+      // Example UPI link. This is a demo and will not work without a real UPI ID.
+      const merchantId = 'example-merchant@upi';
+      const amount = '199.00';
+      const transactionNote = 'TalentNexus AI Resume Enhancement';
+      const upiLink = `upi://pay?pa=${merchantId}&pn=TalentNexus&am=${amount}&cu=INR&tn=${transactionNote}`;
+      
+      // Redirect to the UPI link
+      window.location.href = upiLink;
+      
+      // We close the modal, but the user is now being sent to their UPI app.
+      // We can't know if they paid.
+      setIsUpgradeModalOpen(false);
+    }
+  };
+
+  // Handle Sign Out
+  const handleSignOut = () => {
+    setIsLoggedIn(false);
+    // Reset state if needed
+    setActiveTab('profile');
+    setIsProfileDropdownOpen(false);
+    // ... potentially reset other user-specific state ...
+  };
+
+  // --- Render Functions ---
+
+  const renderHeader = () => (
+    <nav className="bg-white shadow-md w-full">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div className="flex justify-between h-16">
+          <div className="flex-shrink-0 flex items-center">
+            <svg className="h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+            </svg>
+            <span className="font-bold text-xl ml-2 text-gray-800">TalentNexus</span>
+          </div>
+
+          <div className="flex items-center">
+            {/* Tabs */}
+            <div className="flex">
+              {['profile', 'jobs', 'recommendations', 'inbox'].map((tab) => (
+                <button
+                  key={tab}
+                  onClick={() => setActiveTab(tab)}
+                  className={`capitalize inline-flex items-center px-4 pt-1 border-b-2 text-sm font-medium
+                    ${activeTab === tab
+                      ? 'border-indigo-500 text-indigo-600'
+                      : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                    }`}
+                >
+                  {tab}
+                  {tab === 'inbox' && ' ✉️'}
+                  {tab === 'inbox' && unreadCount > 0 && (
+                    <span className="ml-1.5 inline-block bg-red-600 text-white text-xs font-bold px-1.5 py-0.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Profile Icon and Dropdown */}
+            <div className="relative ml-3" ref={profileDropdownRef}>
+              <button
+                onClick={() => setIsProfileDropdownOpen(prev => !prev)}
+                className="flex text-sm rounded-full focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                id="user-menu-button"
+                aria-expanded={isProfileDropdownOpen}
+                aria-haspopup="true"
+              >
+                <span className="sr-only">Open user menu</span>
+                {/* Simple Profile SVG Icon */}
+                <svg className="h-7 w-7 rounded-full text-gray-400 hover:text-gray-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+                  <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-6-3a2 2 0 11-4 0 2 2 0 014 0zm-2 4a5 5 0 00-4.546 2.916A5.986 5.986 0 0010 16a5.986 5.986 0 004.546-2.084A5 5 0 0012 11z" clipRule="evenodd"></path>
+                </svg>
+              </button>
+              {/* Dropdown Menu */}
+              {isProfileDropdownOpen && (
+                <div
+                  className="origin-top-right absolute right-0 mt-2 w-48 rounded-md shadow-lg py-1 bg-white ring-1 ring-black ring-opacity-5 focus:outline-none z-10"
+                  role="menu"
+                  aria-orientation="vertical"
+                  aria-labelledby="user-menu-button"
+                  tabIndex="-1"
+                >
+                  <div className="px-4 py-2 border-b border-gray-100">
+                    <p className="text-sm font-medium text-gray-900 truncate">{studentProfile.name}</p>
+                    <p className="text-sm text-gray-500 truncate">student@email.com</p> 
+                  </div>
+                  <button
+                    onClick={handleSignOut}
+                    className="block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-gray-100"
+                    role="menuitem"
+                    tabIndex="-1"
+                    id="user-menu-item-2"
+                  >
+                    Sign out
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </nav>
+  );
+
+  const renderNotification = () => {
+    if (!notification.show) return null;
+
+    return (
+      <div className="fixed top-20 right-6 z-50 bg-green-500 text-white p-4 rounded-lg shadow-lg transition-transform transform translate-x-0">
+        <div className="flex items-start">
+          <div>
+            <h4 className="font-bold">{notification.title}</h4>
+            <p className="text-sm">{notification.message}</p>
+          </div>
+          <button
+            onClick={() => setNotification({ show: false, title: '', message: '' })}
+            className="ml-4 -mt-1 -mr-1 text-green-100 hover:text-white"
+          >
+            <svg className="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  const renderApplyModal = () => {
+    if (!isApplyModalOpen || !applyingForJob) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+        <div className="bg-white rounded-lg shadow-2xl max-w-lg w-full m-4">
+          <div className="flex justify-between items-center p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800">Apply for {applyingForJob.title}</h3>
+            <button
+              onClick={() => setIsApplyModalOpen(false)}
+              disabled={isSubmitting}
+              className="text-gray-400 hover:text-gray-600 disabled:opacity-50"
+            >
+              <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-6">
+            <p className="text-sm text-gray-600 mb-4">You are applying to <span className="font-semibold">{applyingForJob.title}</span> at <span className="font-semibold">{applyingForJob.company}</span>. Please upload the required documents (e.g., resume, cover letter).</p>
+            
+            <div>
+              <label htmlFor="applicationFile" className="block text-sm font-medium text-gray-700">Upload Document (PDF, DOCX)</label>
+              <input
+                type="file"
+                name="applicationFile"
+                id="applicationFile"
+                accept=".pdf,.doc,.docx,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onChange={(e) => setApplicationFile(e.target.files[0])}
+                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+              />
+              {applicationFile && (
+                <p className="mt-2 text-xs text-green-600">Selected file: {applicationFile.name}</p>
+              )}
+            </div>
+            
+          </div>
+          <div className="flex justify-end p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+            <button
+              type="button"
+              onClick={() => setIsApplyModalOpen(false)}
+              disabled={isSubmitting}
+              className="mr-2 inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleSubmitApplication}
+              disabled={!applicationFile || isSubmitting}
+              className="inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-400"
+            >
+              {isSubmitting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Submitting...
+                </>
+              ) : (
+                'Submit Application'
+              )}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderUpgradeModal = () => {
+    if (!isUpgradeModalOpen) return null;
+
+    return (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 backdrop-blur-sm">
+        <div className="bg-white rounded-lg shadow-2xl max-w-md w-full m-4">
+          <div className="flex justify-between items-center p-4 border-b border-gray-200">
+            <h3 className="text-lg font-semibold text-gray-800">Go Premium</h3>
+            <button
+              onClick={() => setIsUpgradeModalOpen(false)}
+              className="text-gray-400 hover:text-gray-600"
+            >
+              <svg className="h-6 w-6" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+          <div className="p-6">
+            <h4 className="text-xl font-bold text-center text-indigo-600">Unlock AI Resume Enhancement!</h4>
+            <p className="text-center text-gray-600 mt-2">Get your resume professionally rewritten by our Gemini-powered AI to stand out to recruiters.</p>
+            
+            <div className="text-center my-6">
+              <span className="text-5xl font-extrabold text-gray-900">₹199</span>
+              <span className="text-base font-medium text-gray-500">/ one-time fee</span>
+            </div>
+
+            <ul className="space-y-2 text-sm text-gray-600">
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Action-oriented, professional rewrite
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Impactful bullet points
+              </li>
+              <li className="flex items-center">
+                <svg className="h-5 w-5 text-green-500 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                </svg>
+                Optimized for ATS scanners
+              </li>
+            </ul>
+
+            <div className="mt-6">
+              <label className="block text-sm font-medium text-gray-700 text-center">Select Payment Method</label>
+              <div className="space-y-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => handleUpgradeToPremium('gpay')}
+                  className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                  <img src="https://www.gstatic.com/images/icons/material/system/2x/google_pay_primary_rgb_32dp.png" alt="GPay" className="h-6 w-auto mr-2"/>
+                  Pay with GPay
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleUpgradeToPremium('phonepe')}
+                  className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                  <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/phonepe-logo-icon.png" alt="PhonePe" className="h-6 w-auto mr-2"/>
+                   Pay with PhonePe
+                </button>
+                 <button
+                  type="button"
+                  onClick={() => handleUpgradeToPremium('paytm')}
+                  className="w-full inline-flex justify-center items-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50"
+                >
+                  <img src="https://uxwing.com/wp-content/themes/uxwing/download/brands-and-social-media/paytm-logo-icon.png" alt="Paytm" className="h-6 w-auto mr-2"/>
+                   Pay with Paytm
+                </button>
+                 <button
+                  type="button"
+                  onClick={() => handleUpgradeToPremium('credit_card')}
+                  className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-sm font-medium text-white shadow-sm hover:bg-indigo-700"
+                >
+                  <svg className="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H4a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                  </svg>
+                  Pay with Credit Card
+                </button>
+              </div>
+            </div>
+            
+          </div>
+          <div className="flex justify-end p-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
+            <button
+              type="button"
+              onClick={() => setIsUpgradeModalOpen(false)}
+              className="inline-flex justify-center rounded-md border border-gray-300 bg-white py-2 px-4 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2"
+            >
+              Maybe Later
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+
+  const renderProfileView = () => (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-lg shadow-lg">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Profile</h2>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+          {/* Column 1: Form Inputs & File */}
+          <div className="space-y-6">
+            <div>
+              <label htmlFor="name" className="block text-sm font-medium text-gray-700">Full Name</label>
+              <input
+                type="text"
+                name="name"
+                id="name"
+                value={studentProfile.name}
+                onChange={handleProfileChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+              />
+            </div>
+            
+            <div>
+              <label htmlFor="resumeFile" className="block text-sm font-medium text-gray-700">Upload Resume (Image)</label>
+              <input
+                type="file"
+                name="resumeFile"
+                id="resumeFile"
+                accept=".jpg,.jpeg,.png"
+                onChange={handleFileChange}
+                className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
+              />
+            </div>
+
+            <button
+              onClick={extractSkillsFromApi}
+              disabled={!selectedFile || isExtracting}
+              className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 py-2 px-4 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-400"
+            >
+              {isExtracting ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Extracting...
+                </>
+              ) : (
+                'Extract Skills from Resume'
+              )}
+            </button>
+
+            <button
+              onClick={handleEnhanceResume}
+              disabled={isApiLoading}
+              className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-yellow-400 py-2 px-4 text-base font-medium text-yellow-900 shadow-sm hover:bg-yellow-500 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 disabled:bg-gray-300"
+            >
+              {isPremiumUser ? (
+                'Enhance Resume ✨'
+              ) : (
+                'Enhance Resume (Premium) ✨'
+              )}
+            </button>
+
+            <div>
+              <label htmlFor="resumeText" className="block text-sm font-medium text-gray-700">Extracted Resume Text</label>
+              <textarea
+                name="resumeText"
+                id="resumeText"
+                rows="8"
+                value={studentProfile.resumeText}
+                onChange={handleProfileChange}
+                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm bg-gray-50 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2 font-mono"
+                placeholder="AI-extracted resume text will appear here after you upload and extract."
+              />
+            </div>
+
+            <button
+              onClick={handleImproveResume}
+              disabled={isApiLoading}
+              className="w-full inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-100 py-2 px-4 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-200 disabled:text-gray-500"
+            >
+              {isApiLoading ? (
+                <>
+                  <svg className="animate-spin -ml-1 mr-3 h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                  </svg>
+                  Improving...
+                </>
+              ) : (
+                'Improve Resume Text (Free) ✨'
+              )}
+            </button>
+
+          </div>
+          
+          {/* Column 2: Skills & Location */}
+          <div className="space-y-6">
+            {/* Manual Skills */}
+            <div>
+              <label htmlFor="skillInput" className="block text-sm font-medium text-gray-700">Add Skills Manually</label>
+              <div className="mt-1 flex rounded-md shadow-sm">
+                <input
+                  type="text"
+                  id="skillInput"
+                  value={currentSkillInput}
+                  onChange={(e) => setCurrentSkillInput(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && addManualSkill()}
+                  className="block w-full flex-1 rounded-none rounded-l-md border-gray-300 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-2"
+                  placeholder="e.g., JavaScript"
+                />
+                <button
+                  type="button"
+                  onClick={addManualSkill}
+                  className="inline-flex items-center rounded-r-md border border-l-0 border-gray-300 bg-gray-50 px-3 text-sm text-gray-500 hover:bg-gray-100"
+                >
+                  Add
+                </button>
+              </div>
+            
+              <div className="bg-gray-50 p-4 rounded-md h-40 overflow-y-auto border border-gray-200 mt-2">
+                <h3 className="text-sm font-medium text-gray-500 mb-2">Your Skills List</h3>
+                <div className="flex flex-wrap">
+                  {manualSkills.length === 0 ? (
+                    <p className="text-sm text-gray-400">No skills added yet.</p>
+                  ) : (
+                    manualSkills.map(skill => (
+                      <span key={skill} className="inline-flex items-center bg-indigo-100 text-indigo-800 text-sm font-medium mr-2 mb-2 px-3 py-1 rounded-full shadow-sm">
+                        {skill}
+                        <button
+                          onClick={() => removeManualSkill(skill)}
+                          className="ml-1.5 inline-flex flex-shrink-0 text-indigo-400 hover:text-indigo-800"
+                        >
+                          <svg className="h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </span>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Location Preferences */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Location Preferences</label>
+              <div className="mt-2 grid grid-cols-2 gap-4">
+                {/* Country List */}
+                <div className="space-y-2 bg-gray-50 p-4 rounded-md border border-gray-200">
+                  <h4 className="text-sm font-medium text-gray-500">Countries</h4>
+                  {ALL_COUNTRIES.map(country => (
+                    <Checkbox
+                      key={country}
+                      id={`country-${country}`}
+                      label={country}
+                      checked={selectedCountries.includes(country)}
+                      onChange={(e) => handleCountryChange(country, e.target.checked)}
+                    />
+                  ))}
+                  <hr className="my-2 border-gray-200" />
+                  <Checkbox
+                    key="others"
+                    id="country-others"
+                    label="Others"
+                    checked={showOtherLocation}
+                    onChange={(e) => handleShowOtherChange(e.target.checked)}
+                  />
+                  {showOtherLocation && (
+                    <div className="mt-2 pl-6">
+                      <label htmlFor="otherLocation" className="block text-xs font-medium text-gray-500">Specify Location</label>
+                      <input
+                        type="text"
+                        name="otherLocation"
+                        id="otherLocation"
+                        value={otherLocationText}
+                        onChange={(e) => setOtherLocationText(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 text-sm"
+                        placeholder="e.g., Singapore"
+                      />
+                    </div>
+                  )}
+                </div>
+                {/* City List */}
+                <div className="space-y-2 bg-gray-50 p-4 rounded-md border border-gray-200 h-48 overflow-y-auto">
+                  <h4 className="text-sm font-medium text-gray-500">Cities</h4>
+                  {availableCities.length > 0 ? (
+                    <>
+                      {availableCities.map(city => (
+                        <Checkbox
+                          key={city}
+                          id={`city-${city}`}
+                          label={city}
+                          checked={selectedCities.includes(city)}
+                          onChange={(e) => handleCityChange(city, e.target.checked)}
+                        />
+                      ))}
+                    </>
+                  ) : (
+                    <p className="text-sm text-gray-400">Select a country to see cities.</p>
+                  )}
+                  <hr className="my-2 border-gray-200" />
+                  <Checkbox
+                    key="city-others"
+                    id="city-others"
+                    label="Others"
+                    checked={showOtherCity}
+                    onChange={(e) => handleShowOtherCityChange(e.target.checked)}
+                  />
+                  {showOtherCity && (
+                    <div className="mt-2 pl-6">
+                      <label htmlFor="otherCity" className="block text-xs font-medium text-gray-500">Specify City</label>
+                      <input
+                        type="text"
+                        name="otherCity"
+                        id="otherCity"
+                        value={otherCityText}
+                        onChange={(e) => setOtherCityText(e.target.value)}
+                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 text-sm"
+                        placeholder="e.g., Zurich"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+            
+            {/* Company Type Preferences */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Company Type Preferences</label>
+              <div className="mt-2 space-y-2 bg-gray-50 p-4 rounded-md border border-gray-200">
+                {ALL_COMPANY_TYPES.map(type => (
+                  <Checkbox
+                    key={type}
+                    id={`type-${type}`}
+                    label={type}
+                    checked={selectedCompanyTypes.includes(type)}
+                    onChange={(e) => handleCompanyTypeChange(type, e.target.checked)}
+                  />
+                ))}
+              </div>
+            </div>
+
+            {/* Language Preferences */}
+            <div>
+              <label className="block text-sm font-medium text-gray-700">Language Preferences</label>
+              <div className="mt-2 space-y-2 bg-gray-50 p-4 rounded-md border border-gray-200 h-48 overflow-y-auto">
+                {ALL_LANGUAGES.map(lang => (
+                  <Checkbox
+                    key={lang}
+                    id={`lang-${lang}`}
+                    label={lang}
+                    checked={selectedLanguages.includes(lang)}
+                    onChange={(e) => handleLanguageChange(lang, e.target.checked)}
+                  />
+                ))}
+                <hr className="my-2 border-gray-200" />
+                <Checkbox
+                  key="lang-others"
+                  id="lang-others"
+                  label="Others"
+                  checked={showOtherLanguage}
+                  onChange={(e) => handleShowOtherLanguageChange(e.target.checked)}
+                />
+                {showOtherLanguage && (
+                  <div className="mt-2 pl-6">
+                    <label htmlFor="otherLang" className="block text-xs font-medium text-gray-500">Specify Language</label>
+                    <input
+                      type="text"
+                      name="otherLang"
+                      id="otherLang"
+                      value={otherLanguageText}
+                      onChange={(e) => setOtherLanguageText(e.target.value)}
+                      className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm p-1 text-sm"
+                      placeholder="e.g., Arabic"
+                    />
+                  </div>
+                )}
+              </div>
+            </div>
+            
+          </div>
+        </div>
+      </div>
+      
+      <div className="flex justify-end">
+        <button
+          onClick={runRecommendationEngine}
+          disabled={isLoading}
+          className="inline-flex justify-center items-center rounded-md border border-transparent bg-indigo-600 py-2 px-6 text-base font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:bg-gray-400"
+        >
+          {isLoading ? (
+            <>
+              <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Analyzing...
+            </>
+          ) : (
+            'Analyze Profile & Find Matches'
+          )}
+        </button>
+      </div>
+    </div>
+  );
+
+  const renderInboxView = () => (
+    <div className="space-y-6">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Inbox</h2>
+      {messages.length === 0 ? (
+        <div className="text-center p-10 bg-white rounded-lg shadow-lg">
+          <h2 className="text-xl font-semibold text-gray-700">No Messages Yet</h2>
+          <p className="text-gray-500 mt-2">When you apply for jobs, company responses will appear here.</p>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          {messages.map(msg => (
+            <div 
+              key={msg.id} 
+              className={`bg-white p-6 rounded-lg shadow-lg border-l-4 ${msg.isRead ? 'border-gray-200' : 'border-indigo-500'}`}
+            >
+              <div className="flex justify-between items-start">
+                <div>
+                  <h3 className="text-lg font-semibold text-gray-900">{msg.company}</h3>
+                  <p className="text-sm font-medium text-indigo-600">{msg.subject}</p>
+                  <p className="text-xs text-gray-500 mt-1">{new Date(msg.timestamp).toLocaleString()}</p>
+                </div>
+                {!msg.isRead && (
+                  <button
+                    onClick={() => handleMarkAsRead(msg.id)}
+                    className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200"
+                  >
+                    Mark as Read
+                  </button>
+                )}
+              </div>
+              <p className="mt-4 text-sm text-gray-700 whitespace-pre-wrap">{msg.body}</p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
+  const renderJobsView = () => (
+    <div className="space-y-4">
+      <h2 className="text-2xl font-semibold text-gray-800 mb-4">Available Job Openings</h2>
+      {MOCK_JOB_OPENINGS.map(job => (
+        <div key={job.id} className="bg-white p-6 rounded-lg shadow-lg">
+          <div className="flex justify-between items-start">
+            <div>
+              <h3 className="text-lg font-semibold text-indigo-600">{job.title}</h3>
+              <p className="text-md font-medium text-gray-700">{job.company} - <span className="text-gray-500 font-normal">{job.location.city}, {job.location.country}</span></p>
+            </div>
+            <span className="flex-shrink-0 ml-4 px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800">
+              {job.companyType}
+            </span>
+          </div>
+          <p className="mt-2 text-sm text-gray-600">{job.description}</p>
+          <div className="mt-4 flex flex-wrap">
+            {job.requiredSkills.map(skill => (
+              <SkillTag key={skill} skill={skill} />
+            ))}
+          </div>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <button
+              onClick={() => handleVibeCheck(job.company)}
+              className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-sm"
+            >
+              Vibe Check ✨
+            </button>
+            <button
+              onClick={() => handleInterviewPrep(job)}
+              className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-sm"
+            >
+              Prep for Interview ✨
+            </button>
+            <button
+              onClick={() => handleApply(job)}
+              className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+            >
+              Apply Now
+            </button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+
+  const renderSkillUpgradeView = () => {
+    if (upgradeSuggestions.priority.length === 0 && upgradeSuggestions.emerging.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden mt-6">
+        <div className="p-6">
+          <h3 className="text-xl font-semibold text-gray-800">Skill Upgrade Recommendations</h3>
+          <p className="text-sm text-gray-500 mt-1">Based on your profile and top job matches, consider these skills.</p>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-4">
+            {/* Priority Skills */}
+            {upgradeSuggestions.priority.length > 0 && (
+              <div>
+                <h4 className="text-md font-semibold text-red-700">Priority Skills to Learn</h4>
+                <p className="text-sm text-gray-600 mb-2">These skills appeared most often in your job gaps.</p>
+                <div className="flex flex-wrap">
+                  {upgradeSuggestions.priority.map(skill => (
+                    <SkillTag key={skill} skill={skill} type="gap" />
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Emerging Skills */}
+            {upgradeSuggestions.emerging.length > 0 && (
+              <div>
+                <h4 className="text-md font-semibold text-yellow-700">Emerging Skills to Consider</h4>
+                <p className="text-sm text-gray-600 mb-2">Based on your current skills, these are in high demand.</p>
+                <div className="flex flex-wrap">
+                  {upgradeSuggestions.emerging.map(skill => (
+                    <SkillTag key={skill} skill={skill} type="upgrade" />
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderRecommendationsView = () => {
+    if (isLoading) {
+      return (
+        <div className="flex flex-col items-center justify-center p-10 bg-white rounded-lg shadow-lg">
+          <svg className="animate-spin h-12 w-12 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <h2 className="mt-4 text-xl font-semibold text-gray-700">Running AI Analysis...</h2>
+          <p className="text-gray-500">Finding the best matches for your profile.</p>
+        </div>
+      );
+    }
+
+    if (recommendations.length === 0) {
+      return (
+        <div className="text-center p-10 bg-white rounded-lg shadow-lg">
+          <h2 className="text-xl font-semibold text-gray-700">No Recommendations Yet</h2>
+          <p className="text-gray-500 mt-2">Go to the 'Profile' tab, fill in your details, and click 'Analyze Profile & Find Matches' to get started.</p>
+        </div>
+      );
+    }
+    return (
+      <div className="space-y-4">
+        <h2 className="text-2xl font-semibold text-gray-800 mb-4">Your Top Recommendations</h2>
+        {/* Render Skill Upgrade Suggestions first */}
+        {renderSkillUpgradeView()}
+        
+        {recommendations.map(job => (
+          <div key={job.id} className="bg-white p-6 rounded-lg shadow-lg">
+            <div className="flex justify-between items-start">
+              <div>
+                <h3 className="text-lg font-semibold text-indigo-600">{job.title}</h3>
+                <p className="text-md font-medium text-gray-700">{job.company} - <span className="text-gray-500 font-normal">{job.location.city}, {job.location.country}</span></p>
+              </div>
+              <div className="text-right flex-shrink-0 ml-4">
+                <span className="font-bold text-xl text-green-600">{job.matchScore}% Match</span>
+                <span className="block px-3 py-1 rounded-full text-sm font-medium bg-gray-100 text-gray-800 mt-1">
+                  {job.companyType}
+                </span>
+              </div>
+            </div>
+            <p className="mt-2 text-sm text-gray-600">{job.description}</p>
+            
+            <div className="mt-4">
+              <h4 className="text-sm font-semibold text-gray-700">Skill Analysis</h4>
+              <div className="flex flex-wrap mt-2">
+                {job.matchingSkills.map(skill => (
+                  <SkillTag key={skill} skill={skill} type="match" />
+                ))}
+                {job.skillGaps.map(skill => (
+                  <SkillTag key={skill} skill={skill} type="gap" />
+                ))}
+              </div>
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-2">
+              <button
+                onClick={() => handleVibeCheck(job.company)}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-sm"
+              >
+                Vibe Check ✨
+              </button>
+              <button
+                onClick={() => handleInterviewPrep(job)}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-sm"
+              >
+                Prep for Interview ✨
+              </button>
+              <button
+                onClick={() => handleDraftPitch(job)}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-100 text-indigo-700 hover:bg-indigo-200 shadow-sm"
+              >
+                Draft Pitch ✨
+              </button>
+              <button
+                onClick={() => handleApply(job)}
+                className="px-3 py-1 rounded-full text-xs font-medium bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm"
+              >
+                Apply Now
+              </button>
+            </div>
+
+          </div>
+        ))}
+      </div>
+    );
+  };
+
+  const renderLoginView = () => (
+    <div className="min-h-screen bg-gray-100 flex items-center justify-center">
+      <div className="max-w-md w-full bg-white p-8 rounded-lg shadow-xl">
+        <div className="text-center">
+          <svg className="h-12 w-12 text-indigo-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+          </svg>
+          <h2 className="mt-4 text-center text-3xl font-extrabold text-gray-900">
+            Welcome to TalentNexus
+          </h2>
+          <p className="mt-2 text-center text-sm text-gray-600">
+            Your AI-powered internship finder
+          </p>
+        </div>
+        <form className="mt-8 space-y-6" onSubmit={handleLogin}>
+          {/* This is a mock login. In a real app, you'd have inputs. */}
+          <div className="rounded-md shadow-sm -space-y-px">
+            <div>
+              <label htmlFor="email-address" className="sr-only">Email address</label>
+              <input id="email-address" name="email" type="email" autoComplete="email" required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-t-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Email address (e.g., student@email.com)"
+                defaultValue="student@email.com"
+              />
+            </div>
+            <div>
+              <label htmlFor="password" className="sr-only">Password</label>
+              <input id="password" name="password" type="password" autoComplete="current-password" required
+                className="appearance-none rounded-none relative block w-full px-3 py-2 border border-gray-300 placeholder-gray-500 text-gray-900 rounded-b-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm"
+                placeholder="Password"
+                defaultValue="password"
+              />
+            </div>
+          </div>
+          <button type="submit"
+            className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+          >
+            Sign in
+          </button>
+        </form>
+      </div>
+    </div>
+  );
+
+  // --- Main App Return ---
+  if (!isLoggedIn) {
+    return renderLoginView();
+  }
+
+  return (
+    <>
+      {/* Notification */}
+      {renderNotification()}
+
+      {/* Main App UI */}
+      <div className="min-h-screen bg-gray-100">
+        {renderHeader()}
+        <main>
+          <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
+            {activeTab === 'profile' && renderProfileView()}
+            {activeTab === 'jobs' && renderJobsView()}
+            {activeTab === 'recommendations' && renderRecommendationsView()}
+            {activeTab === 'inbox' && renderInboxView()}
+          </div>
+        </main>
+      </div>
+
+      {/* Modal */}
+      {modalContent.title && (
+        <Modal
+          title={modalContent.title}
+          content={modalContent.content}
+          isLoading={isApiLoading}
+          onClose={() => {
+            setModalContent({ title: '', content: '' });
+            if (audioSource) audioSource.stop(); // Stop audio on close
+            setAudioBuffer(null);
+            setIsAudioPlaying(false);
+          }}
+          onAction={modalContent.onAction}
+          actionLabel={modalContent.actionLabel}
+          onTtsAction={handlePlayTts}
+          showAudioPlayer={modalContent.showAudioPlayer}
+          isAudioPlaying={isAudioPlaying}
+        />
+      )}
+
+      {/* Apply Modal */}
+      {renderApplyModal()}
+
+      {/* Upgrade Modal */}
+      {renderUpgradeModal()}
+
+      {/* Audio Player Element (hidden) */}
+      <audio 
+        ref={el => { if (el && !audioContext) setAudioContext(new (window.AudioContext || window.webkitAudioContext)()) }} 
+      />
+    </>
+  );
+}
+
+
